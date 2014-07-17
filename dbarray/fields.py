@@ -1,5 +1,6 @@
 import re
 import sys
+import json
 
 from django.core.exceptions import FieldError, ValidationError
 from django.db import models
@@ -76,6 +77,17 @@ class ArrayFieldBase(object):
         # or deserialize
         if value is None:
             return None
+        
+        if isinstance(value, string_types):
+            if not value:
+                return None
+            # a string can not be from the DB, so it might be from a serializer. 
+            # We serialize as JSON in value_to_string, so we assume it is JSON
+            try:
+                value = json.loads(value)
+            except ValueError:
+                raise ValidationError("Incorrect JSON for ArrayField.")
+                
         if not isinstance(value, (list, tuple, set, deque,)):
             try:
                 iter(value)
@@ -83,7 +95,14 @@ class ArrayFieldBase(object):
                 raise ValidationError("An ArrayField value must be None or an iterable.")
         s = super(ArrayFieldBase, self)
         return [s.to_python(x) for x in value]
-
+        
+    def value_to_string(self, obj):
+        # serialize as JSON for django serializer
+        val = self._get_val_from_obj(obj)
+        if val:
+            return json.dumps(val)
+        return ""
+    
     def get_prep_value(self, value):
         if value is None:
             return None
